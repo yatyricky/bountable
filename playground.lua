@@ -1,146 +1,128 @@
-function table.toJSON(tab)
-    local function fts(fn)
-        local info = debug.getinfo(fn, "S")
-        return string.format("fn%s:%s-%s", info.source, info.linedefined, info.lastlinedefined)
-    end
-
-    local function esc(str)
-        return string.gsub(str, "\\", "/")
-    end
-
-    local function parsePrimitive(o)
-        local to = type(o)
-        if to == "string" then
-            return "\"" .. o .. "\""
-        end
-        local so = tostring(o)
-        if to == "function" then
-            return "\"" .. esc(fts(o)) .. "\""
-        else
-            return so
-        end
-    end
-
-    local function parseTable(t, cached, p)
-        if type(t) ~= "table" then
-            return parsePrimitive(t)
-        end
-        cached = cached or {}
-        p = p or "/"
-        local tc = cached[t]
-        if tc then
-            return "\"ref: " .. tc .. "\""
-        end
-        cached[t] = p
-        local items = {}
-        for k, v in pairs(t) do
-            local ks = tostring(k)
-            local key
-            local tk = type(k)
-            if tk == "number" then
-                key = "\"[" .. ks .. "]\""
-            elseif tk == "function" then
-                key = "\"" .. esc(fts(k)) .. "\""
-            else
-                key = "\"" .. ks .. "\""
-            end
-            table.insert(items, key .. ":" .. parseTable(v, cached, p .. ks .. "/"))
-        end
-        return "{" .. table.concat(items, ",") .. "}"
-    end
-
-    return parseTable(tab)
-end
-
 local Bountable = require("bountable")
 
-local model = {
-    title = "This is title",
-    valid = false,
+local t = Bountable.new({
     list = {
-        {
-            name = "Alice",
-            age = 15,
-        },
-        {
-            name = "Bob",
-            age = 7
-        }
+        -- {
+        --     category = "vip",
+        --     items = {1,2,3},
+        -- },
     },
-    attrs = {
-        stamina = 35,
-        strength = 12
-    },
-    data = {
-        1, 2, 3
-    }
-}
+})
 
-local context = "{context}"
+function table.sequenceEqual(s1, s2)
+    local n1 = s1 == nil
+    local n2 = s2 == nil
+    if n1 and n2 then
+        return true
+    end
+    if n1 or n2 then
+        return false
+    end
+    local len = #s1
+    if len ~= #s2 then
+        return false
+    end
+    for i = 1, len do
+        if s1[i] ~= s2[i] then
+            return false
+        end
+    end
+    return true
+end
 
--- create a boundable table from model
-local t = Bountable.new(model)
+local function printCate(d)
+    if not d then
+        return "nil"
+    end
+    return string.format("[%s](%s)", d.category, table.concat(Bountable.getDirectRaw(d.items), ","))
+end
 
--- t:bind({ "list.*" }, function(key, old, new)
---     print(string.format("Update [list.*] key:%s, old:%s, new:%s", key, old, new))
--- end)
-
-t:bind({ "list" }, function(key, old, new)
-    print(string.format("Update [list] key:%s, old:%s, new:%s", key, old:len(), #new))
+t:bind({ "list" }, function(key, oldValue, newValue)
+    local l1 = oldValue:len()
+    local l2 = #newValue
+    if l1 == l2 then
+        return
+    end
+    print("len changed", l1, l2)
 end)
 
 t:bind({ "list.*" }, function(key, old, new)
-    -- print(string.format("Update [list.*] key:%s, old:%s, new:%s", key, table.toJSON(old), table.toJSON(new)))
-    print(string.format("Update [list.*] key:%s, old:%s, new:%s", key, old and (old.name .. old.age),
-        new and (new.name .. new.age)))
+    if old and new then
+        if old.category ~= new.category then
+            print("cate change@", key, old.category, new.category)
+        end
+        if not table.sequenceEqual(Bountable.getDirectRaw(old.items), Bountable.getDirectRaw(new.items)) then
+            print("items change@", key, printCate(old), printCate(new))
+        end
+    elseif old then
+        print("delete item @", key)
+    elseif new then
+        print("new item @", key, printCate(new))
+    end
 end)
 
 -- t:bind({ "list.*.*" }, function(key, oldValue, newValue)
 --     print(string.format("Update [list.*.*] key:%s, old:%s, new:%s", key, oldValue, newValue))
 -- end)
 
--- t.list = {
---     {
---         name = "Aaron",
---         age = 55,
---     },
---     {
---         name = "Bianca",
---         age = 98,
---     },
---     {
---         name = "Catherine",
---         age = 37,
---     },
--- }
-
-print("--------------------------------")
-
--- t.list[3].name = "Chlore"
-
--- print(t.list[2].name)
-
 t.list = {
     {
-        name = "Aaron",
-        age = 55,
+        category = "vip",
+        items = { 1, 2, 3 },
+    },
+    {
+        category = "promo",
+        items = { 14, 15 },
+    },
+    {
+        category = "res",
+        items = { 21, 22, 23 },
     },
 }
 print("--------------------------------")
 
-t:bind({ "data" }, function(key, old, new)
-    print(string.format("Update [data] key:%s, old:%s, new:%s", key, old, new))
-end)
+t.list = {
+    {
+        category = "vip",
+        items = { 1, 2, 3 },
+    },
+    {
+        category = "promo",
+        items = { 14, 16 },
+    },
+    {
+        category = "res",
+        items = { 21, 22, 23 },
+    },
+}
+print("--------------------------------")
 
-t:bind({ "data.*" }, function(key, old, new)
-    print(string.format("Update [data.*] key:%s, old:%s, new:%s", key, old, new))
-end)
-
-t.data = { 5, 6 }
+t.list = {
+    {
+        category = "vip",
+        items = { 1, 2, 3 },
+    },
+    {
+        category = "res",
+        items = { 21, 22, 23 },
+    },
+}
 
 print("--------------------------------")
 
-t.data[1] = 55
-t.data[4] = 88
-t.data[2] = nil
-t.data[2] = 66
+t.list = {
+    {
+        category = "vip",
+        items = { 1, 2, 3 },
+    },
+    {
+        category = "promo",
+        items = { 11, 12 },
+    },
+    {
+        category = "res",
+        items = { 21, 22, 29 },
+    },
+}
+
+print("--------------------------------")

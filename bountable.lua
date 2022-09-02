@@ -434,4 +434,16 @@ function cls.new(model)
     return setmetatable(inst, mt)
 end
 
+function cls.getDirectRaw(data)
+    if type(data) == "table" then
+        if data.__d then
+            return data.__d
+        else
+            return data
+        end
+    else
+        return data
+    end
+end
+
 return cls

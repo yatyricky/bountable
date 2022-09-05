@@ -58,7 +58,13 @@ local function mtIpairs(t)
     return ipairs(t.__d)
 end
 
+local noEmit = false
+
 local function emit(t, k, v, old)
+    if noEmit then
+        return
+    end
+
     local tab = t.__l[k]
     if tab then
         for func, contexts in pairs(tab) do
@@ -85,9 +91,6 @@ local function doBind(listeners, key, call, ctx)
     if not contexts then
         contexts = {}
         tab[call] = contexts
-    end
-    if contexts[ctx] then
-        print("Double binding")
     end
     contexts[ctx] = 1
 end
@@ -299,6 +302,22 @@ local function unbindContext(this, context)
     end
 end
 
+local function reset(this)
+    noEmit = true
+    local oldKeys = {}
+    for k, _ in pairs(this.__d) do
+        oldKeys[k] = true
+    end
+    for k, v in pairs(this.__o) do
+        this[k] = v
+        oldKeys[k] = nil
+    end
+    for k, _ in pairs(oldKeys) do
+        this[k] = nil
+    end
+    noEmit = false
+end
+
 --endregion
 
 mt.__newindex = function(t, k, v)
@@ -313,7 +332,6 @@ mt.__newindex = function(t, k, v)
         -- delete
         d[k] = nil
         emit(t, k, d[k], old)
-        l[k] = nil
     else
         local tp = type(v)
         if old == nil then
@@ -402,6 +420,7 @@ local template = {
     unbind = unbind,
     unbindPaths = unbindPaths,
     unbindContext = unbindContext,
+    reset = reset,
     insert = insert,
     remove = remove,
     len = mtLen,
@@ -430,6 +449,7 @@ function cls.new(model)
     local inst = shallow(template)
     inst.__l = {} -- listeners
     inst.__b = {} -- binding args
+    inst.__o = model
     inst.__d = clone(model) -- raw data
     return setmetatable(inst, mt)
 end

@@ -252,6 +252,7 @@ t.attrs = {
 
 assert("assign table", {
     "Update [attrs] key:attrs, old:dex:10/sta:40, new:str:300/dex:400/sta:200",
+    "Update [attrs.strength] key:strength, old:nil, new:300",
     "Update [attrs.*] key:strength, old:nil, new:300",
     "Update [attrs.*] key:dexterity, old:10, new:400",
     "Update [attrs.*] key:stamina, old:40, new:200",

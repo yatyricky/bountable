@@ -302,7 +302,7 @@ local function unbindContext(this, context)
     end
 end
 
-local function reset(this)
+local function resetValue(this)
     noEmit = true
     local oldKeys = {}
     for k, _ in pairs(this.__d) do
@@ -420,7 +420,7 @@ local template = {
     unbind = unbind,
     unbindPaths = unbindPaths,
     unbindContext = unbindContext,
-    reset = reset,
+    resetValue = resetValue,
     insert = insert,
     remove = remove,
     len = mtLen,

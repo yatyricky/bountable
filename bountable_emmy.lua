@@ -29,6 +29,9 @@ function m:unbindPaths(paths) end
 ---@param context any
 function m:unbindContext(context) end
 
+---重置值为初始状态，不会重置监听器
+function m:resetValue() end
+
 ---插入一个值，只能对列表类型的table使用，参数同table.insert
 ---@overload fun(value: any)
 ---@param pos number pos

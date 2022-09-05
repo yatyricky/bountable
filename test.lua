@@ -463,4 +463,13 @@ assert("everything", {
     "Update [*] key:title, old:AnotherTitle, new:Thank you",
 })
 
+t:resetValue()
+
+t.title = "Totally new"
+
+assert("reset values", {
+    "Update [title] ctx:{context}, key:title, old:This is title, new:Totally new",
+    "Update [*] key:title, old:This is title, new:Totally new"
+})
+
 assertionReport()

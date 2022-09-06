@@ -2,11 +2,8 @@ local Bountable = require("bountable")
 
 local t = Bountable.new({
     list = {
-        -- {
-        --     category = "vip",
-        --     items = {1,2,3},
-        -- },
     },
+    albert = nil
 })
 
 function table.sequenceEqual(s1, s2)
@@ -30,13 +27,6 @@ function table.sequenceEqual(s1, s2)
     return true
 end
 
-local function printCate(d)
-    if not d then
-        return "nil"
-    end
-    return string.format("[%s](%s)", d.category, table.concat(Bountable.getDirectRaw(d.items), ","))
-end
-
 t:bind({ "list" }, function(key, oldValue, newValue)
     local l1 = oldValue:len()
     local l2 = #newValue
@@ -48,16 +38,11 @@ end)
 
 t:bind({ "list.*" }, function(key, old, new)
     if old and new then
-        if old.category ~= new.category then
-            print("cate change@", key, old.category, new.category)
-        end
-        if not table.sequenceEqual(Bountable.getDirectRaw(old.items), Bountable.getDirectRaw(new.items)) then
-            print("items change@", key, printCate(old), printCate(new))
-        end
+        print("update item @", key, old, new)
     elseif old then
         print("delete item @", key)
     elseif new then
-        print("new item @", key, printCate(new))
+        print("new item @", key, new)
     end
 end)
 
@@ -65,64 +50,29 @@ end)
 --     print(string.format("Update [list.*.*] key:%s, old:%s, new:%s", key, oldValue, newValue))
 -- end)
 
-t.list = {
-    {
-        category = "vip",
-        items = { 1, 2, 3 },
-    },
-    {
-        category = "promo",
-        items = { 14, 15 },
-    },
-    {
-        category = "res",
-        items = { 21, 22, 23 },
-    },
-}
-print("--------------------------------")
+t:bind({ "albert" }, function(key, old, new)
+    print("update [albert]", key, old, new)
+end)
 
 t.list = {
-    {
-        category = "vip",
-        items = { 1, 2, 3 },
-    },
-    {
-        category = "promo",
-        items = { 14, 16 },
-    },
-    {
-        category = "res",
-        items = { 21, 22, 23 },
-    },
+    "Alice",
+    "Bob",
+    "Chris"
 }
+t.albert = "lorem"
 print("--------------------------------")
-
+t:reset()
 t.list = {
-    {
-        category = "vip",
-        items = { 1, 2, 3 },
-    },
-    {
-        category = "res",
-        items = { 21, 22, 23 },
-    },
+    "Alice",
+    "Brand",
+    "Chris"
 }
+t.albert = "ipsum"
 
 print("--------------------------------")
-
 t.list = {
-    {
-        category = "vip",
-        items = { 1, 2, 3 },
-    },
-    {
-        category = "promo",
-        items = { 11, 12 },
-    },
-    {
-        category = "res",
-        items = { 21, 22, 29 },
-    },
+    "Alice",
+    "Chris"
 }
 
 print("--------------------------------")

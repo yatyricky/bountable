@@ -61,7 +61,7 @@ t.list = {
 }
 t.albert = "lorem"
 print("--------------------------------")
-t:reset()
+t:resetValue()
 t.list = {
     "Alice",
     "Brand",

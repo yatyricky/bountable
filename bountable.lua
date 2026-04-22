@@ -10,10 +10,12 @@ local s_format = string.format
 local s_gmatch = string.gmatch
 
 local str_table = "table"
+local str_number = "number"
 local str_asterisk = "*"
 local str_static = "s"
 local str_period = "."
-local str_split = "([^%s]+)"
+-- s_format placeholder, not a Lua pattern class
+local pattern_split = "([^%%s]+)"
 
 local function isEmpty(t)
     return t == nil or next(t) == nil
@@ -30,9 +32,20 @@ local function shallow(tab)
     return t
 end
 
+local function deepCopy(tab)
+    if type(tab) ~= str_table then
+        return tab
+    end
+    local t = {}
+    for key, value in pairs(tab) do
+        t[key] = deepCopy(value)
+    end
+    return t
+end
+
 local function split(inputstr, sep)
     local t = {}
-    for str in s_gmatch(inputstr, s_format(str_split, sep)) do
+    for str in s_gmatch(inputstr, s_format(pattern_split, sep)) do
         t_insert(t, str)
     end
     return t
@@ -41,9 +54,14 @@ end
 ---@type Bountable
 local cls = {}
 local mt = {}
+local template -- forward declaration; populated below
 
 function mt.__index(t, k)
-    return t.__d[k]
+    local v = t.__d[k]
+    if v ~= nil then
+        return v
+    end
+    return template[k]
 end
 
 local function mtLen(t)
@@ -58,10 +76,14 @@ local function mtIpairs(t)
     return ipairs(t.__d)
 end
 
-local noEmit = false
+mt.__len = mtLen
+mt.__pairs = function(t) return mtPairs(t) end
+mt.__ipairs = function(t) return mtIpairs(t) end
+
+local noEmitDepth = 0
 
 local function emit(t, k, v, old)
-    if noEmit then
+    if noEmitDepth > 0 then
         return
     end
 
@@ -303,19 +325,24 @@ local function unbindContext(this, context)
 end
 
 local function resetValue(this)
-    noEmit = true
-    local oldKeys = {}
-    for k, _ in pairs(this.__d) do
-        oldKeys[k] = true
+    noEmitDepth = noEmitDepth + 1
+    local ok, err = pcall(function()
+        local oldKeys = {}
+        for k, _ in pairs(this.__d) do
+            oldKeys[k] = true
+        end
+        for k, v in pairs(this.__o) do
+            this[k] = deepCopy(v)
+            oldKeys[k] = nil
+        end
+        for k, _ in pairs(oldKeys) do
+            this[k] = nil
+        end
+    end)
+    noEmitDepth = noEmitDepth - 1
+    if not ok then
+        error(err)
     end
-    for k, v in pairs(this.__o) do
-        this[k] = v
-        oldKeys[k] = nil
-    end
-    for k, _ in pairs(oldKeys) do
-        this[k] = nil
-    end
-    noEmit = false
 end
 
 --endregion
@@ -344,8 +371,8 @@ mt.__newindex = function(t, k, v)
             emit(t, k, d[k], old)
         else
             if tp == str_table then
-                emit(t, k, v, old)
-                if old then
+                if type(old) == str_table then
+                    emit(t, k, v, old)
                     local oldKeys = {}
                     for kk, _ in old:pairs() do
                         oldKeys[kk] = 1
@@ -358,15 +385,55 @@ mt.__newindex = function(t, k, v)
                         mt.__newindex(d[k], kk, nil)
                     end
                 else
-                    for kk, vv in pairs(v) do
-                        mt.__newindex(d[k], kk, vv)
+                    -- primitive -> table: wrap fresh, then re-apply pending bindings
+                    d[k] = cls.new(v)
+                    for _, args in ipairs(t.__b) do
+                        local newPs = shallow(args[1])
+                        newPs[1] = k
+                        bindRecursive(t, newPs, args[2], args[3])
                     end
+                    emit(t, k, d[k], old)
                 end
             else
                 d[k] = v
                 emit(t, k, d[k], old)
             end
         end
+    end
+end
+
+-- Shift integer-keyed listener entries up by one starting at `pos`.
+local function shiftListenersInsert(l, pos)
+    local maxK = nil
+    for k, _ in pairs(l) do
+        if type(k) == str_number and k >= pos then
+            if maxK == nil or k > maxK then
+                maxK = k
+            end
+        end
+    end
+    if maxK == nil then
+        return
+    end
+    for k = maxK, pos, -1 do
+        l[k + 1] = l[k]
+        l[k] = nil
+    end
+end
+
+-- Shift integer-keyed listener entries down by one starting at `pos`.
+local function shiftListenersRemove(l, pos)
+    l[pos] = nil
+    local keys = {}
+    for k, _ in pairs(l) do
+        if type(k) == str_number and k > pos then
+            t_insert(keys, k)
+        end
+    end
+    table.sort(keys)
+    for _, k in ipairs(keys) do
+        l[k - 1] = l[k]
+        l[k] = nil
     end
 end
 
@@ -384,7 +451,7 @@ local function insert(this, arg1, arg2)
 
     local old = d[key]
     local tp = type(item)
-    t_insert(this.__l, key, nil)
+    shiftListenersInsert(this.__l, key)
     if tp == str_table then
         t_insert(d, key, cls.new(item))
         for _, args in ipairs(this.__b) do
@@ -412,15 +479,16 @@ local function remove(this, arg1)
 
     local removed = t_remove(d, key)
     emit(this, key, d[key], removed)
-    t_remove(this.__l, key)
+    shiftListenersRemove(this.__l, key)
 end
 
-local template = {
+template = {
     bind = bind,
     unbind = unbind,
     unbindPaths = unbindPaths,
     unbindContext = unbindContext,
     resetValue = resetValue,
+    reset = resetValue, -- alias
     insert = insert,
     remove = remove,
     len = mtLen,
@@ -446,16 +514,16 @@ local function clone(tab)
 end
 
 function cls.new(model)
-    local inst = shallow(template)
+    local inst = {}
     inst.__l = {} -- listeners
     inst.__b = {} -- binding args
-    inst.__o = model
+    inst.__o = deepCopy(model) -- pristine snapshot for resetValue
     inst.__d = clone(model) -- raw data
     return setmetatable(inst, mt)
 end
 
 function cls.getDirectRaw(data)
-    if type(data) == "table" then
+    if type(data) == str_table then
         if data.__d then
             return data.__d
         else
